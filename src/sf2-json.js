@@ -147,23 +147,7 @@ function buildWavBuffer(audioData) {
 	else throw new Error(`buildWavBuffer: type '${type}' non supporté (SF3 compressé).`);
 	pcm16 = normalizeBuffer(pcm16);
 
-	// const loopLen = loopEnd - loopStart;
-	// const MIN_LOOP_SAMPLES = Math.ceil(2 * 1152 * sampleRate / RESAMPLE_RATE);
-	// if (loopLen > 0 && loopLen < MIN_LOOP_SAMPLES) {
-	// 	const preLoop = pcm16.slice(0, loopStart * 2);
-	// 	const loopData = pcm16.slice(loopStart * 2, loopEnd * 2);
-	// 	const postLoop = pcm16.slice(loopEnd * 2);
-	// 	const repeats = Math.ceil(MIN_LOOP_SAMPLES / loopLen);
-	// 	const loopRepeated = Buffer.concat(Array(repeats).fill(loopData));
-	// 	pcm16 = Buffer.concat([preLoop, loopRepeated, postLoop]);
-	// }
 
-	// const minSamples = Math.ceil(4 * 1152 * sampleRate / RESAMPLE_RATE);
-	// const minBytes = minSamples * 2;
-	// if (pcm16.byteLength < minBytes) {
-	// 	const pad = Buffer.alloc(minBytes - pcm16.byteLength);
-	// 	pcm16 = Buffer.concat([pcm16, pad]);
-	// }
 
 	const numChannels = 1;
 	const bitsPerSample = 16;
@@ -190,67 +174,68 @@ function buildWavBuffer(audioData) {
 }
 
 
+
+
+
+
+
+
+
+
+
 function extractZones(soundFont, parsed, presetHeaderIndex) {
-	const presetGeneratorsList = soundFont.getPresetGenerators(presetHeaderIndex);
-	const zones = [];
-	const seenSampleIds = new Set();
-	let globalPresetGen = null;
+    const presetGeneratorsList = soundFont.getPresetGenerators(presetHeaderIndex);
+    const zones = [];
+    let globalPresetGen = null;
 
-	for (const rawGenList of presetGeneratorsList) {
-		const presetGen = createPresetGeneratorObject(rawGenList);
-		if (presetGen.instrument === undefined) {
-			globalPresetGen = presetGen;
-			continue;
-		}
+    for (const rawGenList of presetGeneratorsList) {
+        const presetGen = createPresetGeneratorObject(rawGenList);
+        if (presetGen.instrument === undefined) {
+            globalPresetGen = presetGen;
+            continue;
+        }
 
-		const instrId = presetGen.instrument;
-		const instrGeneratorsList = soundFont.getInstrumentGenerators(instrId);
-		const defaults = convertToInstrumentGeneratorParams(DefaultInstrumentZone);
-		let globalInstrGen = null;
+        const instrId = presetGen.instrument;
+        const instrGeneratorsList = soundFont.getInstrumentGenerators(instrId);
+        const defaults = convertToInstrumentGeneratorParams(DefaultInstrumentZone);
+        let globalInstrGen = null;
 
-		for (const rawInstrGenList of instrGeneratorsList) {
-			const instrGen = createInstrumentGeneratorObject(rawInstrGenList);
-			if (instrGen.sampleID === undefined) { globalInstrGen = instrGen; continue; }
+        for (const rawInstrGenList of instrGeneratorsList) {
+            const instrGen = createInstrumentGeneratorObject(rawInstrGenList);
+            
+            if (instrGen.sampleID === undefined) { 
+                globalInstrGen = instrGen; 
+                continue; 
+            }
 
-			const merged = { ...defaults };
-			if (globalInstrGen) Object.assign(merged, globalInstrGen);
-			Object.assign(merged, instrGen);
-			const applyPresetOffsets = (gen) => {
-				if (!gen) return;
-				for (const [key, val] of Object.entries(gen)) {
-					if (key === 'keyRange' || key === 'velRange' || key === 'instrument') continue;
-					if (key in merged && typeof val === 'number') merged[key] += val;
-				}
-			};
-			applyPresetOffsets(globalPresetGen);
-			applyPresetOffsets(presetGen);
+            const merged = { ...defaults };
+            if (globalInstrGen) Object.assign(merged, globalInstrGen);
+            Object.assign(merged, instrGen);
 
-			const sampleId = merged.sampleID;
-			if (seenSampleIds.has(sampleId)) continue;
-			const sampleHeader = parsed.sampleHeaders[sampleId];
-			if (!sampleHeader || sampleHeader.isEnd) continue;
-			seenSampleIds.add(sampleId);
-			zones.push({ generators: merged, sampleHeader, sample: parsed.samples[sampleId] });
-		}
-	}
-	return zones;
+            const applyPresetOffsets = (gen) => {
+                if (!gen) return;
+                for (const [key, val] of Object.entries(gen)) {
+                    if (key === 'keyRange' || key === 'velRange' || key === 'instrument' || key === 'sampleID') continue;
+                    if (key in merged && typeof val === 'number') merged[key] += val;
+                }
+            };
+            
+            applyPresetOffsets(globalPresetGen);
+            applyPresetOffsets(presetGen);
 
-	// const byKeyRange = new Map();
-	// for (const zone of zones) {
-	// 	const lo = zone.generators.keyRange?.lo ?? 0;
-	// 	const hi = zone.generators.keyRange?.hi ?? 127;
-	// 	const key = `${lo}-${hi}`;
-	// 	if (!byKeyRange.has(key)) {
-	// 		byKeyRange.set(key, zone);
-	// 	} else {
-	// 		const center = (lo + hi) / 2;
-	// 		const existing = byKeyRange.get(key);
-	// 		const existingDist = Math.abs(existing.sampleHeader.originalPitch - center);
-	// 		const newDist = Math.abs(zone.sampleHeader.originalPitch - center);
-	// 		if (newDist < existingDist) byKeyRange.set(key, zone);
-	// 	}
-	// }
-	// return Array.from(byKeyRange.values());
+            const sampleId = merged.sampleID;
+            const sampleHeader = parsed.sampleHeaders[sampleId];
+            
+            if (!sampleHeader || sampleHeader.isEnd) continue;
+            
+            zones.push({ 
+                generators: merged, 
+                sampleHeader, 
+                sample: parsed.samples[sampleId] 
+            });
+        }
+    }
+    return zones;
 }
 
 
