@@ -147,8 +147,6 @@ function buildWavBuffer(audioData) {
 	else throw new Error(`buildWavBuffer: type '${type}' non supporté (SF3 compressé).`);
 	pcm16 = normalizeBuffer(pcm16);
 
-
-
 	const numChannels = 1;
 	const bitsPerSample = 16;
 	const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
@@ -174,68 +172,51 @@ function buildWavBuffer(audioData) {
 }
 
 
-
-
-
-
-
-
-
-
-
 function extractZones(soundFont, parsed, presetHeaderIndex) {
-    const presetGeneratorsList = soundFont.getPresetGenerators(presetHeaderIndex);
-    const zones = [];
-    let globalPresetGen = null;
+	const presetGeneratorsList = soundFont.getPresetGenerators(presetHeaderIndex);
+	const zonesMap = new Map();
+	let globalPresetGen = null;
 
-    for (const rawGenList of presetGeneratorsList) {
-        const presetGen = createPresetGeneratorObject(rawGenList);
-        if (presetGen.instrument === undefined) {
-            globalPresetGen = presetGen;
-            continue;
-        }
+	for (const rawGenList of presetGeneratorsList) {
+		const presetGen = createPresetGeneratorObject(rawGenList);
+		if (presetGen.instrument === undefined) { globalPresetGen = presetGen; continue; }
 
-        const instrId = presetGen.instrument;
-        const instrGeneratorsList = soundFont.getInstrumentGenerators(instrId);
-        const defaults = convertToInstrumentGeneratorParams(DefaultInstrumentZone);
-        let globalInstrGen = null;
+		const instrId = presetGen.instrument;
+		const instrGeneratorsList = soundFont.getInstrumentGenerators(instrId);
+		const defaults = convertToInstrumentGeneratorParams(DefaultInstrumentZone);
+		let globalInstrGen = null;
 
-        for (const rawInstrGenList of instrGeneratorsList) {
-            const instrGen = createInstrumentGeneratorObject(rawInstrGenList);
-            
-            if (instrGen.sampleID === undefined) { 
-                globalInstrGen = instrGen; 
-                continue; 
-            }
+		for (const rawInstrGenList of instrGeneratorsList) {
+			const instrGen = createInstrumentGeneratorObject(rawInstrGenList);
+			if (instrGen.sampleID === undefined) { globalInstrGen = instrGen; continue; }
 
-            const merged = { ...defaults };
-            if (globalInstrGen) Object.assign(merged, globalInstrGen);
-            Object.assign(merged, instrGen);
+			const merged = { ...defaults };
+			if (globalInstrGen) Object.assign(merged, globalInstrGen);
+			Object.assign(merged, instrGen);
 
-            const applyPresetOffsets = (gen) => {
-                if (!gen) return;
-                for (const [key, val] of Object.entries(gen)) {
-                    if (key === 'keyRange' || key === 'velRange' || key === 'instrument' || key === 'sampleID') continue;
-                    if (key in merged && typeof val === 'number') merged[key] += val;
-                }
-            };
-            
-            applyPresetOffsets(globalPresetGen);
-            applyPresetOffsets(presetGen);
+			const applyPresetOffsets = (gen) => {
+				if (!gen) return;
+				for (const [key, val] of Object.entries(gen)) {
+					if (['keyRange', 'velRange', 'instrument', 'sampleID'].includes(key)) continue;
+					if (key in merged && typeof val === 'number') merged[key] += val;
+				}
+			};
+			applyPresetOffsets(globalPresetGen);
+			applyPresetOffsets(presetGen);
 
-            const sampleId = merged.sampleID;
-            const sampleHeader = parsed.sampleHeaders[sampleId];
-            
-            if (!sampleHeader || sampleHeader.isEnd) continue;
-            
-            zones.push({ 
-                generators: merged, 
-                sampleHeader, 
-                sample: parsed.samples[sampleId] 
-            });
-        }
-    }
-    return zones;
+			const lo = merged.keyRange?.lo ?? 0;
+			const hi = merged.keyRange?.hi ?? 127;
+			const keyRangeStr = `${lo}-${hi}`;
+			
+			const sampleHeader = parsed.sampleHeaders[merged.sampleID];
+			if (!sampleHeader || sampleHeader.isEnd) continue;
+
+			if (!zonesMap.has(keyRangeStr)) {
+				zonesMap.set(keyRangeStr, { generators: merged, sampleHeader, sample: parsed.samples[merged.sampleID] });
+			}
+		}
+	}
+	return Array.from(zonesMap.values());
 }
 
 
