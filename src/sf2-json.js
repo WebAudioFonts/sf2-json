@@ -69,7 +69,7 @@ function encodeOpus(wavBuffer, bitrate = 128, sampleRate = 32000) {
 		'-i', 'pipe:0',
 		'-ar', String(sampleRate),
 		'-ac', '1',
-		'-af', "highpass=f=100,lowpass=f=8000,firequalizer=gain='if(lt(f,100),-2,if(lt(f,400),-3,if(lt(f,3000),2,if(lt(f,8000),1,-5))))':gain_entry='entry(0,-10);entry(100,0);entry(400,-2);entry(3000,2);entry(8000,1);entry(20000,-15)'",
+		'-af', "highpass=f=100,lowpass=f=8000",
 		'-b:a', `${bitrate}k`,
 		'-c:a', 'libopus',
 		'-id3v2_version', '0',
@@ -147,23 +147,23 @@ function buildWavBuffer(audioData) {
 	else throw new Error(`buildWavBuffer: type '${type}' non supporté (SF3 compressé).`);
 	pcm16 = normalizeBuffer(pcm16);
 
-	const loopLen = loopEnd - loopStart;
-	const MIN_LOOP_SAMPLES = Math.ceil(2 * 1152 * sampleRate / RESAMPLE_RATE);
-	if (loopLen > 0 && loopLen < MIN_LOOP_SAMPLES) {
-		const preLoop = pcm16.slice(0, loopStart * 2);
-		const loopData = pcm16.slice(loopStart * 2, loopEnd * 2);
-		const postLoop = pcm16.slice(loopEnd * 2);
-		const repeats = Math.ceil(MIN_LOOP_SAMPLES / loopLen);
-		const loopRepeated = Buffer.concat(Array(repeats).fill(loopData));
-		pcm16 = Buffer.concat([preLoop, loopRepeated, postLoop]);
-	}
+	// const loopLen = loopEnd - loopStart;
+	// const MIN_LOOP_SAMPLES = Math.ceil(2 * 1152 * sampleRate / RESAMPLE_RATE);
+	// if (loopLen > 0 && loopLen < MIN_LOOP_SAMPLES) {
+	// 	const preLoop = pcm16.slice(0, loopStart * 2);
+	// 	const loopData = pcm16.slice(loopStart * 2, loopEnd * 2);
+	// 	const postLoop = pcm16.slice(loopEnd * 2);
+	// 	const repeats = Math.ceil(MIN_LOOP_SAMPLES / loopLen);
+	// 	const loopRepeated = Buffer.concat(Array(repeats).fill(loopData));
+	// 	pcm16 = Buffer.concat([preLoop, loopRepeated, postLoop]);
+	// }
 
-	const minSamples = Math.ceil(4 * 1152 * sampleRate / RESAMPLE_RATE);
-	const minBytes = minSamples * 2;
-	if (pcm16.byteLength < minBytes) {
-		const pad = Buffer.alloc(minBytes - pcm16.byteLength);
-		pcm16 = Buffer.concat([pcm16, pad]);
-	}
+	// const minSamples = Math.ceil(4 * 1152 * sampleRate / RESAMPLE_RATE);
+	// const minBytes = minSamples * 2;
+	// if (pcm16.byteLength < minBytes) {
+	// 	const pad = Buffer.alloc(minBytes - pcm16.byteLength);
+	// 	pcm16 = Buffer.concat([pcm16, pad]);
+	// }
 
 	const numChannels = 1;
 	const bitsPerSample = 16;
@@ -233,24 +233,24 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 			zones.push({ generators: merged, sampleHeader, sample: parsed.samples[sampleId] });
 		}
 	}
+	return zones;
 
-	const byKeyRange = new Map();
-	for (const zone of zones) {
-		const lo = zone.generators.keyRange?.lo ?? 0;
-		const hi = zone.generators.keyRange?.hi ?? 127;
-		const key = `${lo}-${hi}`;
-		if (!byKeyRange.has(key)) {
-			byKeyRange.set(key, zone);
-		} else {
-			const center = (lo + hi) / 2;
-			const existing = byKeyRange.get(key);
-			const existingDist = Math.abs(existing.sampleHeader.originalPitch - center);
-			const newDist = Math.abs(zone.sampleHeader.originalPitch - center);
-			if (newDist < existingDist) byKeyRange.set(key, zone);
-		}
-	}
-
-	return Array.from(byKeyRange.values());
+	// const byKeyRange = new Map();
+	// for (const zone of zones) {
+	// 	const lo = zone.generators.keyRange?.lo ?? 0;
+	// 	const hi = zone.generators.keyRange?.hi ?? 127;
+	// 	const key = `${lo}-${hi}`;
+	// 	if (!byKeyRange.has(key)) {
+	// 		byKeyRange.set(key, zone);
+	// 	} else {
+	// 		const center = (lo + hi) / 2;
+	// 		const existing = byKeyRange.get(key);
+	// 		const existingDist = Math.abs(existing.sampleHeader.originalPitch - center);
+	// 		const newDist = Math.abs(zone.sampleHeader.originalPitch - center);
+	// 		if (newDist < existingDist) byKeyRange.set(key, zone);
+	// 	}
+	// }
+	// return Array.from(byKeyRange.values());
 }
 
 

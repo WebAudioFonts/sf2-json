@@ -1,6 +1,6 @@
 {
   "name": "sf2-json",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "SF2 to JSON Converter for WebAudioFonts",
   "keywords": [
     "sf2",
@@ -16,13 +16,13 @@
     "sound",
     "soundbank"
   ],
-  "homepage": "https://github.com/ZmotriN/sf2-json#readme",
+  "homepage": "https://github.com/WebAudioFonts/sf2-json#readme",
   "bugs": {
-    "url": "https://github.com/ZmotriN/sf2-json/issues"
+    "url": "https://github.com/WebAudioFonts/sf2-json/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ZmotriN/sf2-json.git"
+    "url": "git+https://github.com/WebAudioFonts/sf2-json.git"
   },
   "license": "MIT",
   "author": "Maxime Larrivée-Roy",
