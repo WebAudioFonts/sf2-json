@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { spawnSync } from 'child_process';
 import { createRequire } from 'module';
 import { gunzipSync } from 'zlib';
-// import encodeMP3 from './mp3encoder.js';
 import path from 'path';
 import {
 	parse,
@@ -67,31 +66,15 @@ function encodeOpus(wavBuffer, bitrate = 128, sampleRate = 32000) {
 	const result = spawnSync(ffmpegPath, [
 		'-hide_banner',
 		'-loglevel', 'error',
-		'-i', 'pipe:0',              // entrée stdin
-		'-ar', String(sampleRate),   // resample sortie
-		'-ac', '1',                  // mono
-		// '-af', 'limiter=limit=0.95',
-		// '-af', 'apad,atrim=0:3,loudnorm=I=-16:TP=-1.5',
-		// '-af', 'compand=attacks=0.01:decays=0.1:points=-80/-90|-40/-30|-20/-20:gain=6',
-
-		// '-af', [
-		// 	'alimiter=level_in=1:level_out=1:limit=0.9:attack=5:release=50:level=disabled',
-		// 	'apad=pad_dur=0.5',         // pad 500ms pour que alimiter finisse proprement
-		// 	'silenceremove=stop_periods=-1:stop_duration=0.01:stop_threshold=-60dB', // retire le silence à la fin
-		// ].join(','),
-		// '-af', 'apad=pad_dur=0.5,afftdn=nr=10:nt=w,loudnorm,equalizer=f=3000:t=q:w=1:g=3,silenceremove=stop_periods=-1:stop_duration=0.01:stop_threshold=-60dB',
-		// '-af', 'highpass=f=100,lowpass=f=8000,equalizer=f=3000:t=q:w=1:g=3',
-		// highpass=f=80,lowpass=f=12000,equalizer=f=300:t=q:w=1:g=-4,equalizer=f=1500:t=q:w=1:g=2,equalizer=f=5000:t=q:w=1:g=3"
-		// '-af', "firequalizer=gain='if(lt(f,200),-3,if(lt(f,3000),2,0))':gain_entry='entry(0,-5);entry(200,-3);entry(1000,0);entry(3000,2);entry(8000,0);entry(20000,-10)'",
-		// '-af', "adeclick,highpass=f=40,firequalizer=gain='if(lt(f,100),-2,if(lt(f,400),-3,if(lt(f,3000),2,if(lt(f,8000),1,-5))))':gain_entry='entry(0,-10);entry(100,0);entry(400,-2);entry(3000,2);entry(8000,1);entry(20000,-15)'",
-		// '-af', "highpass=f=100,lowpass=f=8000,firequalizer=gain='if(gt(f,400),0,-2)'",
+		'-i', 'pipe:0',
+		'-ar', String(sampleRate),
+		'-ac', '1',
 		'-af', "highpass=f=100,lowpass=f=8000,firequalizer=gain='if(lt(f,100),-2,if(lt(f,400),-3,if(lt(f,3000),2,if(lt(f,8000),1,-5))))':gain_entry='entry(0,-10);entry(100,0);entry(400,-2);entry(3000,2);entry(8000,1);entry(20000,-15)'",
-		'-b:a', `${bitrate}k`,       // bitrate
+		'-b:a', `${bitrate}k`,
 		'-c:a', 'libopus',
-		// '-write_xing', '0',          // pas de frame Xing
-		'-id3v2_version', '0',       // pas de tag ID3
+		'-id3v2_version', '0',
 		'-f', 'ogg',
-		'pipe:1',                    // sortie stdout
+		'pipe:1',
 	], { input: wavBuffer, maxBuffer: 64 * 1024 * 1024 });
 
 	if (result.error) throw result.error;
@@ -110,8 +93,6 @@ function getGMCategory(bank, program) {
 
 
 function getGMInstrumentName(bank, program, fallback) {
-	// if (bank === 128) return fallback;
-	// if (bank >= 120) return fallback;
 	return fallback ?? GM_INSTRUMENTS[program];
 }
 
@@ -168,7 +149,6 @@ function buildWavBuffer(audioData) {
 
 	const loopLen = loopEnd - loopStart;
 	const MIN_LOOP_SAMPLES = Math.ceil(2 * 1152 * sampleRate / RESAMPLE_RATE);
-
 	if (loopLen > 0 && loopLen < MIN_LOOP_SAMPLES) {
 		const preLoop = pcm16.slice(0, loopStart * 2);
 		const loopData = pcm16.slice(loopStart * 2, loopEnd * 2);
@@ -190,7 +170,6 @@ function buildWavBuffer(audioData) {
 	const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
 	const blockAlign = numChannels * (bitsPerSample / 8);
 	const dataSize = pcm16.byteLength;
-
 	const header = Buffer.allocUnsafe(44);
 
 	header.write('RIFF', 0);
@@ -211,61 +190,6 @@ function buildWavBuffer(audioData) {
 }
 
 
-// function extractZones(soundFont, parsed, presetHeaderIndex) {
-//     const presetGeneratorsList = soundFont.getPresetGenerators(presetHeaderIndex);
-//     const zones = [];
-//     const seenSampleIds = new Set();
-//     let globalPresetGen = null;
-
-//     for (const rawGenList of presetGeneratorsList) {
-//         const presetGen = createPresetGeneratorObject(rawGenList);
-
-//         if (presetGen.instrument === undefined) {
-//             globalPresetGen = presetGen;
-//             continue;
-//         }
-
-//         const instrId = presetGen.instrument;
-//         const instrGeneratorsList = soundFont.getInstrumentGenerators(instrId);
-//         const defaults = convertToInstrumentGeneratorParams(DefaultInstrumentZone);
-//         let globalInstrGen = null;
-
-//         for (const rawInstrGenList of instrGeneratorsList) {
-//             const instrGen = createInstrumentGeneratorObject(rawInstrGenList);
-//             if (instrGen.sampleID === undefined) {
-//                 globalInstrGen = instrGen;
-//                 continue;
-//             }
-
-//             const merged = { ...defaults };
-//             if (globalInstrGen) Object.assign(merged, globalInstrGen);
-//             Object.assign(merged, instrGen);
-
-//             const applyPresetOffsets = (gen) => {
-//                 if (!gen) return;
-//                 for (const [key, val] of Object.entries(gen)) {
-//                     if (key === 'keyRange' || key === 'velRange' || key === 'instrument') continue;
-//                     if (key in merged && typeof val === 'number') merged[key] += val;
-//                 }
-//             };
-//             applyPresetOffsets(globalPresetGen);
-//             applyPresetOffsets(presetGen);
-
-//             const sampleId = merged.sampleID;
-//             if (seenSampleIds.has(sampleId)) continue;
-
-//             const sampleHeader = parsed.sampleHeaders[sampleId];
-//             if (!sampleHeader || sampleHeader.isEnd) continue;
-
-//             seenSampleIds.add(sampleId);
-//             zones.push({ generators: merged, sampleHeader, sample: parsed.samples[sampleId] });
-//         }
-//     }
-
-//     return zones;
-// }
-
-
 function extractZones(soundFont, parsed, presetHeaderIndex) {
 	const presetGeneratorsList = soundFont.getPresetGenerators(presetHeaderIndex);
 	const zones = [];
@@ -274,7 +198,6 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 
 	for (const rawGenList of presetGeneratorsList) {
 		const presetGen = createPresetGeneratorObject(rawGenList);
-
 		if (presetGen.instrument === undefined) {
 			globalPresetGen = presetGen;
 			continue;
@@ -292,7 +215,6 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 			const merged = { ...defaults };
 			if (globalInstrGen) Object.assign(merged, globalInstrGen);
 			Object.assign(merged, instrGen);
-
 			const applyPresetOffsets = (gen) => {
 				if (!gen) return;
 				for (const [key, val] of Object.entries(gen)) {
@@ -307,7 +229,6 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 			if (seenSampleIds.has(sampleId)) continue;
 			const sampleHeader = parsed.sampleHeaders[sampleId];
 			if (!sampleHeader || sampleHeader.isEnd) continue;
-
 			seenSampleIds.add(sampleId);
 			zones.push({ generators: merged, sampleHeader, sample: parsed.samples[sampleId] });
 		}
@@ -318,7 +239,6 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 		const lo = zone.generators.keyRange?.lo ?? 0;
 		const hi = zone.generators.keyRange?.hi ?? 127;
 		const key = `${lo}-${hi}`;
-
 		if (!byKeyRange.has(key)) {
 			byKeyRange.set(key, zone);
 		} else {
@@ -377,7 +297,7 @@ async function buildZone(generators, sampleHeader, sample) {
 
 
 export default async function sf2tojson(sf2Path, outputDir, options = {}) {
-	const { verbose = true } = options;
+	const { verbose = true, compress = true } = options;
 	if (!existsSync(outputDir)) mkdirSync(outputDir, { recursive: true });
 
 	const bankName = path.basename(sf2Path).replace(/\.sf2(\.gz)?$/, '');

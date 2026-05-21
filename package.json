@@ -1,10 +1,11 @@
 {
   "name": "sf2-json",
   "version": "1.0.0",
-  "description": "SF2 to JSON Converter",
+  "description": "SF2 to JSON Converter for WebAudioFonts",
   "keywords": [
     "sf2",
     "json",
+    "webaudiofont",
     "music",
     "sound",
     "soundfont",
@@ -26,12 +27,24 @@
   "license": "MIT",
   "author": "Maxime Larrivée-Roy",
   "type": "module",
+  "files": [
+    "src/",
+    "index.js",
+    "index.d.ts"
+  ],
   "main": "index.js",
+  "types": "index.d.ts",
   "exports": {
-    ".": "./index.js"
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./index.js"
+    }
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "sf2tojson": "./bin/cli.js"
   },
   "dependencies": {
     "@marmooo/soundfont-parser": "^0.1.8",
