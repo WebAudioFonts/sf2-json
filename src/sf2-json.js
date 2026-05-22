@@ -16,8 +16,9 @@ import {
 const require = createRequire(import.meta.url);
 const ffmpegPath = require('ffmpeg-static');
 
-
+const MAX_NORMALIZE_FACTOR = 1.0;
 const RESAMPLE_RATE = 48000;
+const OPUS_KBPS = 96;
 
 const GM_CATEGORIES = [
 	'Piano', 'Chromatic Perc', 'Organ', 'Guitar',
@@ -62,26 +63,22 @@ const GM_INSTRUMENTS = [
 ];
 
 
-function encodeOpus(wavBuffer, bitrate = 128, sampleRate = 32000) {
+function encodeOpus(wavBuffer, bitrate = 96, sampleRate = 32000) {
 	const result = spawnSync(ffmpegPath, [
 		'-hide_banner',
 		'-loglevel', 'error',
 		'-i', 'pipe:0',
 		'-ar', String(sampleRate),
 		'-ac', '1',
-		'-af', "highpass=f=100,lowpass=f=8000",
+		'-af', "highpass=f=20,lowpass=f=20000",
 		'-b:a', `${bitrate}k`,
 		'-c:a', 'libopus',
 		'-id3v2_version', '0',
 		'-f', 'ogg',
 		'pipe:1',
 	], { input: wavBuffer, maxBuffer: 64 * 1024 * 1024 });
-
 	if (result.error) throw result.error;
-	if (result.status !== 0) {
-		throw new Error(`ffmpeg error: ${result.stderr?.toString()}`);
-	}
-
+	if (result.status !== 0) throw new Error(`ffmpeg error: ${result.stderr?.toString()}`);
 	return result.stdout;
 }
 
@@ -126,13 +123,15 @@ function normalizeBuffer(buffer, targetPeak = 0.9) {
         const abs = Math.abs(samples[i]);
         if (abs > peak) peak = abs;
     }
-    if (peak === 0) return buffer;
+
     const targetPeakInt = targetPeak * 32767;
-    const factor = Math.min(targetPeakInt / peak, 3.0);
-    if (factor <= 1.0) return buffer;
-    for (let i = 0; i < samples.length; i++) {
-        samples[i] = Math.round(samples[i] * factor);
+    const factor = peak > targetPeakInt ? (targetPeakInt / peak) : MAX_NORMALIZE_FACTOR;
+    if (factor < 1.0) {
+        for (let i = 0; i < samples.length; i++) {
+            samples[i] = Math.round(samples[i] * factor);
+        }
     }
+
     return buffer;
 }
 
@@ -204,15 +203,17 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 			applyPresetOffsets(globalPresetGen);
 			applyPresetOffsets(presetGen);
 
-			const lo = merged.keyRange?.lo ?? 0;
-			const hi = merged.keyRange?.hi ?? 127;
-			const keyRangeStr = `${lo}-${hi}`;
-			
+			const lo  = merged.keyRange?.lo ?? 0;
+			const hi  = merged.keyRange?.hi ?? 127;
+			const vlo = merged.velRange?.lo ?? 0;
+			const vhi = merged.velRange?.hi ?? 127;
+			const zoneKey = `${lo}-${hi}:${vlo}-${vhi}:${merged.sampleID}`;
+
 			const sampleHeader = parsed.sampleHeaders[merged.sampleID];
 			if (!sampleHeader || sampleHeader.isEnd) continue;
 
-			if (!zonesMap.has(keyRangeStr)) {
-				zonesMap.set(keyRangeStr, { generators: merged, sampleHeader, sample: parsed.samples[merged.sampleID] });
+			if (!zonesMap.has(zoneKey)) {
+				zonesMap.set(zoneKey, { generators: merged, sampleHeader, sample: parsed.samples[merged.sampleID] });
 			}
 		}
 	}
@@ -221,44 +222,46 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 
 
 async function buildZone(generators, sampleHeader, sample) {
-	const { sampleRate, originalPitch, pitchCorrection, loopStart, loopEnd, start } = sampleHeader;
-	const fineTune = (generators.fineTune ?? 0) + (pitchCorrection ?? 0);
+    const { originalPitch, pitchCorrection, loopStart, loopEnd } = sampleHeader;
 
-	const SF2_DEFAULT_ATTACK = -12000;
-	const SF2_DEFAULT_HOLD = -12000;
-	const SF2_DEFAULT_DECAY = -12000;
-	const SF2_DEFAULT_SUSTAIN = 0;
-	const SF2_DEFAULT_RELEASE = -12000;
+    const rootKey = (
+        generators.overridingRootKey !== undefined &&
+        generators.overridingRootKey !== 255 &&
+        generators.overridingRootKey > 0
+    ) ? generators.overridingRootKey : originalPitch;
 
-	const ahdsr =
-		(generators.attackVolEnv ?? SF2_DEFAULT_ATTACK) !== SF2_DEFAULT_ATTACK ||
-		(generators.holdVolEnv ?? SF2_DEFAULT_HOLD) !== SF2_DEFAULT_HOLD ||
-		(generators.decayVolEnv ?? SF2_DEFAULT_DECAY) !== SF2_DEFAULT_DECAY ||
-		(generators.sustainVolEnv ?? SF2_DEFAULT_SUSTAIN) !== SF2_DEFAULT_SUSTAIN ||
-		(generators.releaseVolEnv ?? SF2_DEFAULT_RELEASE) !== SF2_DEFAULT_RELEASE;
+    const coarseTune = generators.coarseTune ?? 0;
+    const fineTune   = (generators.fineTune ?? 0) + (pitchCorrection ?? 0);
 
-	const midi = (generators.overridingRootKey !== undefined &&
-		generators.overridingRootKey !== 255 &&
-		generators.overridingRootKey >= 0)
-		? generators.overridingRootKey
-		: originalPitch;
+    const SF2_DEF_ATTACK  = -12000;
+    const SF2_DEF_HOLD    = -12000;
+    const SF2_DEF_DECAY   = -12000;
+    const SF2_DEF_SUSTAIN = 0;
+    const SF2_DEF_RELEASE = -12000;
+    const ahdsr =
+        (generators.attackVolEnv  ?? SF2_DEF_ATTACK)  !== SF2_DEF_ATTACK  ||
+        (generators.holdVolEnv    ?? SF2_DEF_HOLD)    !== SF2_DEF_HOLD    ||
+        (generators.decayVolEnv   ?? SF2_DEF_DECAY)   !== SF2_DEF_DECAY   ||
+        (generators.sustainVolEnv ?? SF2_DEF_SUSTAIN) !== SF2_DEF_SUSTAIN ||
+        (generators.releaseVolEnv ?? SF2_DEF_RELEASE) !== SF2_DEF_RELEASE;
 
-	const wavBuffer = buildWavBuffer(sample);
-	const mp3Buffer = encodeOpus(wavBuffer, 96, RESAMPLE_RATE, true);
-	const audioBase64 = mp3Buffer.toString('base64');
+    const wavBuffer = buildWavBuffer(sample);
+    const mp3Buffer = encodeOpus(wavBuffer, OPUS_KBPS, RESAMPLE_RATE);
 
-	return {
-		originalPitch: midi * 100,
-		keyRangeLow: generators.keyRange?.lo ?? 0,
-		keyRangeHigh: generators.keyRange?.hi ?? 127,
-		loopStart,
-		loopEnd,
-		coarseTune: generators.coarseTune ?? 0,
-		fineTune,
-		sampleRate,
-		ahdsr: ahdsr,
-		file: audioBase64,
-	};
+    return {
+        originalPitch: rootKey * 100,
+        keyRangeLow:  generators.keyRange?.lo ?? 0,
+        keyRangeHigh: generators.keyRange?.hi ?? 127,
+        velRangeLow:  generators.velRange?.lo ?? 0,
+        velRangeHigh: generators.velRange?.hi ?? 127,
+        loopStart,
+        loopEnd,
+        coarseTune,
+        fineTune,
+        sampleRate: sampleHeader.sampleRate,
+        ahdsr,
+        file: mp3Buffer.toString('base64'),
+    };
 }
 
 
