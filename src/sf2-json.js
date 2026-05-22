@@ -126,7 +126,7 @@ function normalizeBuffer(buffer, targetPeak = 0.9) {
 
     const targetPeakInt = targetPeak * 32767;
     const factor = peak > targetPeakInt ? (targetPeakInt / peak) : MAX_NORMALIZE_FACTOR;
-    if (factor < 1.0) {
+    if (factor < MAX_NORMALIZE_FACTOR) {
         for (let i = 0; i < samples.length; i++) {
             samples[i] = Math.round(samples[i] * factor);
         }
@@ -222,7 +222,7 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 
 
 async function buildZone(generators, sampleHeader, sample) {
-    const { originalPitch, pitchCorrection, loopStart, loopEnd } = sampleHeader;
+    const { originalPitch, pitchCorrection, loopStart, loopEnd, sampleRate } = sampleHeader;
 
     const rootKey = (
         generators.overridingRootKey !== undefined &&
@@ -230,6 +230,7 @@ async function buildZone(generators, sampleHeader, sample) {
         generators.overridingRootKey > 0
     ) ? generators.overridingRootKey : originalPitch;
 
+	const loopRatio = RESAMPLE_RATE / sampleRate;
     const coarseTune = generators.coarseTune ?? 0;
     const fineTune   = (generators.fineTune ?? 0) + (pitchCorrection ?? 0);
 
@@ -254,11 +255,11 @@ async function buildZone(generators, sampleHeader, sample) {
         keyRangeHigh: generators.keyRange?.hi ?? 127,
         velRangeLow:  generators.velRange?.lo ?? 0,
         velRangeHigh: generators.velRange?.hi ?? 127,
-        loopStart,
-        loopEnd,
+        loopStart: loopStart * loopRatio,
+        loopEnd: loopEnd * loopRatio,
         coarseTune,
         fineTune,
-        sampleRate: sampleHeader.sampleRate,
+        sampleRate: RESAMPLE_RATE,
         ahdsr,
         file: mp3Buffer.toString('base64'),
     };
