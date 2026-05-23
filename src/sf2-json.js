@@ -123,7 +123,6 @@ function normalizeBuffer(buffer, targetPeak = 0.9) {
         const abs = Math.abs(samples[i]);
         if (abs > peak) peak = abs;
     }
-
     const targetPeakInt = targetPeak * 32767;
     const factor = peak > targetPeakInt ? (targetPeakInt / peak) : MAX_NORMALIZE_FACTOR;
     if (factor < MAX_NORMALIZE_FACTOR) {
@@ -131,7 +130,6 @@ function normalizeBuffer(buffer, targetPeak = 0.9) {
             samples[i] = Math.round(samples[i] * factor);
         }
     }
-
     return buffer;
 }
 
@@ -211,7 +209,6 @@ function extractZones(soundFont, parsed, presetHeaderIndex) {
 
 			const sampleHeader = parsed.sampleHeaders[merged.sampleID];
 			if (!sampleHeader || sampleHeader.isEnd) continue;
-
 			if (!zonesMap.has(zoneKey)) {
 				zonesMap.set(zoneKey, { generators: merged, sampleHeader, sample: parsed.samples[merged.sampleID] });
 			}

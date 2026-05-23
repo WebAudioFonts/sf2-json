@@ -18,13 +18,12 @@ npm install sf2-json
 The package exposes the `sf2tojson` function for programmatic use.
 
 ```javascript
-import { sf2tojson } from 'sf2-json';
-
+import sf2tojson from 'sf2-json';
+  
 async function processSoundFont() {
   try {
     const inputPath = 'path/to/instrument.sf2';
     const outputDir = 'path/to/output/directory';
-    
     await sf2tojson(inputPath, outputDir);
     console.log('Conversion successfully completed.');
   } catch (error) {
@@ -59,6 +58,11 @@ sf2tojson ./assets/piano.sf2 ./data/json/
 * **Seamless Integration**: Provides clear access to SF2 data structures in a JSON format compatible with WebAudio and MIDI synthesizers.
 * **Type Safety**: Includes TypeScript declaration files (`index.d.ts`) to ensure robust development environments.
 * **Extensibility**: Built upon established parsing standards to ensure reliability.
+
+## Opus Encoding Support
+* **High-Efficiency Compression**: Native support for encoding sample data into the Opus format. This significantly reduces file sizes for large soundfonts without compromising the high-fidelity transient response essential for percussive and melodic samples.
+* **Optimized Latency**: Leveraging Opus’s low-latency design, samples encoded in this format are ideal for real-time synthesis applications where CPU overhead for decompression must be kept to a minimum.
+* **Cross-Platform Compatibility**: Encoded Opus samples are encapsulated using standard containers, ensuring broad compatibility across web browsers via the Web Audio API and various desktop audio engines.
 
 ## License
 
