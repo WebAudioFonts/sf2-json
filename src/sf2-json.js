@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
-import { spawnSync } from 'child_process';
+import { spawn } from 'child_process';
 import { createRequire } from 'module';
 import { gunzipSync } from 'zlib';
 import path from 'path';
@@ -19,6 +19,7 @@ const ffmpegPath = require('ffmpeg-static');
 const MAX_NORMALIZE_FACTOR = 1.0;
 const RESAMPLE_RATE = 48000;
 const OPUS_KBPS = 96;
+const FFMPEG_THREADS = 32;
 
 const GM_CATEGORIES = [
 	'Piano', 'Chromatic Perc', 'Organ', 'Guitar',
@@ -63,23 +64,69 @@ const GM_INSTRUMENTS = [
 ];
 
 
-function encodeOpus(wavBuffer, bitrate = 96, sampleRate = 32000) {
-	const result = spawnSync(ffmpegPath, [
-		'-hide_banner',
-		'-loglevel', 'error',
-		'-i', 'pipe:0',
-		'-ar', String(sampleRate),
-		'-ac', '1',
-		'-af', "highpass=f=20,lowpass=f=20000",
-		'-b:a', `${bitrate}k`,
-		'-c:a', 'libopus',
-		'-id3v2_version', '0',
-		'-f', 'ogg',
-		'pipe:1',
-	], { input: wavBuffer, maxBuffer: 64 * 1024 * 1024 });
-	if (result.error) throw result.error;
-	if (result.status !== 0) throw new Error(`ffmpeg error: ${result.stderr?.toString()}`);
-	return result.stdout;
+function createSemaphore(limit) {
+	let running = 0;
+	const queue = [];
+	function acquire() {
+		return new Promise((res) => {
+			if (running < limit) { running++; res(); }
+			else queue.push(res);
+		});
+	}
+	function release() {
+		running--;
+		if (queue.length > 0) { running++; queue.shift()(); }
+	}
+	return { acquire, release };
+}
+
+const ffmpegSemaphore = createSemaphore(FFMPEG_THREADS);
+
+async function encodeOpus(wavBuffer, bitrate = 96, sampleRate = 32000) {
+	await ffmpegSemaphore.acquire();
+	return new Promise((resolve, reject) => {
+		const proc = spawn(ffmpegPath, [
+			'-hide_banner',
+			'-loglevel', 'error',
+			'-i', 'pipe:0',
+			'-ar', String(sampleRate),
+			'-ac', '1',
+			'-af', "highpass=f=20,lowpass=f=20000",
+			'-b:a', `${bitrate}k`,
+			'-c:a', 'libopus',
+			'-id3v2_version', '0',
+			'-f', 'ogg',
+			'pipe:1',
+		], { stdio: ['pipe', 'pipe', 'pipe'] });
+		const chunks = [];
+		const errChunks = [];
+		let released = false;
+		function release() {
+			if (released) return;
+			released = true;
+			ffmpegSemaphore.release();
+		}
+		function cleanup(err) {
+			proc.stdout.destroy();
+			proc.stderr.destroy();
+			if (!proc.killed) proc.kill();
+			release();
+			if (err) reject(err);
+		}
+		proc.stdout.on('data', (d) => chunks.push(d));
+		proc.stderr.on('data', (d) => errChunks.push(d));
+		proc.on('error', cleanup);
+		proc.stdin.on('error', cleanup);
+		proc.on('close', (code) => {
+			if (code !== 0) return cleanup(new Error(`ffmpeg error: ${Buffer.concat(errChunks).toString()}`));
+			release();
+			resolve(Buffer.concat(chunks));
+		});
+		proc.stdin.write(wavBuffer, (err) => {
+			if (err) return cleanup(err);
+			proc.stdin.end();
+		});
+	});
 }
 
 
@@ -244,7 +291,7 @@ async function buildZone(generators, sampleHeader, sample) {
         (generators.releaseVolEnv ?? SF2_DEF_RELEASE) !== SF2_DEF_RELEASE;
 
     const wavBuffer = buildWavBuffer(sample);
-    const mp3Buffer = encodeOpus(wavBuffer, OPUS_KBPS, RESAMPLE_RATE);
+    const mp3Buffer = await encodeOpus(wavBuffer, OPUS_KBPS, RESAMPLE_RATE);
 
     return {
         originalPitch: rootKey * 100,

@@ -168,7 +168,7 @@ SF2 raw sample (PCM16 or PCM24)
 | `RESAMPLE_RATE`      | `48000`  | Output sample rate for all zones |
 | `OPUS_KBPS`          | `96`     | Opus encoding bitrate in kbps |
 | `MAX_NORMALIZE_FACTOR` | `1.0`  | Normalization is only applied downward (no upward gain) |
-
+| `FFMPEG_THREADS`     | `32`     | Number of concurrent FFMPEG threads
 ---
 
 ## Opus encoding
