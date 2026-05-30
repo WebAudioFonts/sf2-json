@@ -1,6 +1,6 @@
 {
   "name": "sf2-json",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "SF2 to JSON Converter for WebAudioFonts",
   "keywords": [
     "sf2",
@@ -16,7 +16,7 @@
     "sound",
     "soundbank"
   ],
-  "homepage": "https://github.com/WebAudioFonts/sf2-json#readme",
+  "homepage": "https://webaudiofonts.com/sf2json/",
   "bugs": {
     "url": "https://github.com/WebAudioFonts/sf2-json/issues"
   },

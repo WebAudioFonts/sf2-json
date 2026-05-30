@@ -1,3 +1,5 @@
+![WebAudioFonts Logo](https://webaudiofonts.com/images/logo.svg)
+
 # sf2-json
 
 Converts SoundFont 2 (`.sf2`) files into JSON presets consumable by the Web Audio API. Each preset is written as a `.json` file where sample data is base64-encoded Opus audio, ready to be decoded by `AudioContext.decodeAudioData()`.
