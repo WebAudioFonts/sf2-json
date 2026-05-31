@@ -274,9 +274,11 @@ async function buildZone(generators, sampleHeader, sample) {
         generators.overridingRootKey > 0
     ) ? generators.overridingRootKey : originalPitch;
 
-	const loopRatio = RESAMPLE_RATE / sampleRate;
-    const coarseTune = generators.coarseTune ?? 0;
-    const fineTune   = (generators.fineTune ?? 0) + (pitchCorrection ?? 0);
+	const sampleModes = generators.sampleModes ?? 0;
+	const shouldLoop  = (sampleModes & 1) === 1;
+	const loopRatio   = RESAMPLE_RATE / sampleRate;
+    const coarseTune  = generators.coarseTune ?? 0;
+    const fineTune    = (generators.fineTune ?? 0) + (pitchCorrection ?? 0);
 
     const SF2_DEF_ATTACK  = -12000;
     const SF2_DEF_HOLD    = -12000;
@@ -299,8 +301,8 @@ async function buildZone(generators, sampleHeader, sample) {
         keyRangeHigh: generators.keyRange?.hi ?? 127,
         velRangeLow:  generators.velRange?.lo ?? 0,
         velRangeHigh: generators.velRange?.hi ?? 127,
-        loopStart: Math.round(loopStart * loopRatio),
-        loopEnd: Math.round(loopEnd * loopRatio),
+		loopStart:    shouldLoop ? Math.round(loopStart * loopRatio) : 0,
+		loopEnd:      shouldLoop ? Math.round(loopEnd   * loopRatio) : 0,
         coarseTune,
         fineTune,
         sampleRate: RESAMPLE_RATE,
